@@ -1,0 +1,15 @@
+.idea/
+.github/
+.claude/
+
+tests/
+examples/
+scripts/
+
+.env*
+.eslint*
+.mocharc.json
+.editorconfig
+.nvmrc
+tsconfig*
+CLAUDE.md

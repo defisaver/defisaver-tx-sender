@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "./cjs/",
+    "target": "ES2020",
+    "lib": ["ES2022", "DOM"],
+    "declaration": true,
+    "strict": true,
+    "noImplicitOverride": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node", "mocha"],
+    "baseUrl": ".",
+    "paths": {
+      "@defisaver/tx-sender": ["./src/index.ts"]
+    }
+  },
+  "include": [
+    "./src/**/*.ts",
+    "./tests/**/*.ts",
+    "./examples/**/*.ts"
+  ]
+}
