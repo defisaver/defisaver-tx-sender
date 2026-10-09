@@ -1,6 +1,6 @@
 {
   "name": "@defisaver/tx-sender",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Provider-agnostic transaction orchestration SDK for DeFi Saver: encoding, estimation, Safe multisig signing, TxSaver and EIP-5792 batching. Bring your own chain adapter (viem, web3, ethers).",
   "license": "MIT",
   "repository": "https://github.com/defisaver/defisaver-tx-sender",
