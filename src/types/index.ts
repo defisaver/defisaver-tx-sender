@@ -109,6 +109,19 @@ export enum TxOnBehalf {
   SW = 'SW',
 }
 
+/** Body of the backend tx-monitor registration, sent as soon as a tx hash is known. */
+export interface TxMonitorRegistration {
+  address: EthereumAddress; // The connected account.
+  txHash: string;
+  title: string;
+  category: string;
+  onBehalf: TxOnBehalf;
+  smartWalletAddress: EthereumAddress; // Executing smart wallet, or the selected one for EOA txs.
+  isSafeMultisigTx: boolean; // Connected through a Safe app.
+  network: NetworkNumber;
+  forkId?: string;
+}
+
 export type EncoderType = 'EOA' | ProxyType;
 
 /** Safe `getTransactionHash` arguments, positional. */

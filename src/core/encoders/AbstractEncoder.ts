@@ -1,6 +1,6 @@
 import type { Env } from '../ExecutionContext';
 import type TxWrapper from '../../TxWrapper';
-import { createDefaultGasPriceProvider, getGasPriceForEstimation } from '../../services/gas';
+import { getGasPriceForEstimation, resolveGasPriceProvider } from '../../services/gas';
 import { isInsufficientFundsEstimateError, requireAddress, requireContract } from '../../services/utils';
 import { FAILED_ESTIMATE_GAS } from '../../config/constants';
 import {
@@ -57,7 +57,7 @@ export default abstract class AbstractEncoder {
   abstract estimateTx(executeParams: unknown[], ethValue: string, options?: EncodeOptions): Promise<GasEstimate>;
 
   protected getGasPriceForEstimation(): Promise<string> {
-    const provider = this.env.config.gasPriceProvider || createDefaultGasPriceProvider(this.chain);
+    const provider = resolveGasPriceProvider(this.env.config);
     return getGasPriceForEstimation(this.chain, provider, this.network, this.env.isFork);
   }
 

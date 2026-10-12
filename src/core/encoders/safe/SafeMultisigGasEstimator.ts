@@ -4,7 +4,7 @@ import {
 } from 'viem';
 import { multicallAbi, safeAbi, simulateTxAccessorAbi } from '../../../abi';
 import type { Env } from '../../ExecutionContext';
-import { createDefaultGasPriceProvider, getGasPriceForEstimation } from '../../../services/gas';
+import { getGasPriceForEstimation, resolveGasPriceProvider } from '../../../services/gas';
 import type { SafeWallet } from '../../../types';
 import type { MultisigGasEstimateParams } from '../../../types/encoding';
 
@@ -25,7 +25,7 @@ export default class SafeMultisigGasEstimator {
   private get chain() { return this.env.config.chain; }
 
   private getGasPriceForEstimation() {
-    const provider = this.env.config.gasPriceProvider || createDefaultGasPriceProvider(this.chain);
+    const provider = resolveGasPriceProvider(this.env.config);
     return getGasPriceForEstimation(this.chain, provider, this.env.network, this.env.isFork);
   }
 

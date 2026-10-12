@@ -98,6 +98,11 @@ export default class TxSender {
     return this.createAndExecute.handleCreateAndExecute(txsToExecute, label);
   }
 
+  /** The wallet `handleCreateAndExecute` would run through, without queueing anything. */
+  planProxyForExecution() {
+    return this.createAndExecute.planProxyForExecution();
+  }
+
   /** Queues a sign / execute / cancel for a pending Safe multisig tx fetched from the backend. */
   handlePendingTx(txType: PendingTxType, multisigTx: MultisigTx, safeAddress: EthereumAddress) {
     const isCancel = txType === TxType.CancelPendingTx;

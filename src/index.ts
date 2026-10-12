@@ -5,7 +5,9 @@ export type { TxWrapperOptions } from './TxWrapper';
 export { default as TxError } from './core/TxError';
 export { SignatureStore } from './core/SignatureStore';
 
-export type { TxSenderConfig, ResolvedTxSenderConfig, GasPriceProvider } from './config/TxSenderConfig';
+export type {
+  TxSenderConfig, ResolvedTxSenderConfig, GasPriceProvider, PriorityFeeOracle,
+} from './config/TxSenderConfig';
 export { DEFAULT_MESSAGES, formatMessage } from './config/messages';
 export type { Messages } from './config/messages';
 export { DEFAULT_ADDRESSES, resolveAddresses } from './config/addresses';
@@ -21,7 +23,7 @@ export { DfsApi } from './api/DfsApi';
 export type { DfsApiOptions } from './api/DfsApi';
 
 export { SignType, TYPED_SIGNATURE_TYPES, buildTypedData } from './services/typedData';
-export { createDefaultGasPriceProvider, getGasPriceForEstimation } from './services/gas';
+export { createDefaultGasPriceProvider, getGasPriceForEstimation, resolveGasPriceProvider } from './services/gas';
 export {
   isSafeWallet, isMultisigSafeWallet, getDefaultSafeWalletObject, predictSafeAddress, getNextSafeWalletNonce,
 } from './services/safe';

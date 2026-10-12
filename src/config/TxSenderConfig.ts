@@ -12,6 +12,9 @@ import { DfsApi, type DfsApiOptions } from '../api/DfsApi';
 /** Returns base fee and priority fee in gwei. */
 export type GasPriceProvider = (network: NetworkNumber, isFork: boolean) => Promise<{ baseFee: string; priorityFee: string }>;
 
+/** Returns the priority fee in gwei. Consulted by the default provider only when the base fee is high. */
+export type PriorityFeeOracle = (network: NetworkNumber) => Promise<string>;
+
 export interface TxSenderConfig {
   chain: ChainAdapter;
   state: StateProvider;
@@ -22,6 +25,7 @@ export interface TxSenderConfig {
   messages?: Partial<Messages>;
   addresses?: AddressOverrides; // Per-network contract address overrides.
   gasPriceProvider?: GasPriceProvider; // Replaces the default `latest block base fee + static tip` estimation.
+  priorityFeeOracle?: PriorityFeeOracle; // Used by the default provider; ignored when `gasPriceProvider` is set.
   /** Human labels for approve types, keyed by the `approveType` string. Defaults to the key itself. */
   approveTypeLabels?: Record<string, string>;
   tokensNeedReapprove?: string[];

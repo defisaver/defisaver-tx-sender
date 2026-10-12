@@ -3,10 +3,14 @@ import sinon from 'sinon';
 import { DfsApi } from '../src/api/DfsApi';
 import { erc20Abi, dsProxyAbi } from '../src/abi';
 import { encodeCall, resolveAbiFunction } from '../src/services/abi';
+import { createDefaultGasPriceProvider } from '../src/services/gas';
+import { silentLogger } from '../src/interfaces/Logger';
+import { NetworkNumber } from '../src/types';
 import { buildTypedData, SignType } from '../src/services/typedData';
 import { gweiToWei, isInsufficientFundsEstimateError, requireAddress, toUnits } from '../src/services/utils';
 import TxError from '../src/core/TxError';
 import { assertRejects } from './utils/assert';
+import { createMockChain } from './utils/mocks';
 
 describe('abi helpers', () => {
   it('resolves overloads by full signature', () => {
@@ -76,5 +80,44 @@ describe('DfsApi', () => {
     assert.equal(await api.submitTxToTxSaver(1, {} as never), 9);
     await assertRejects(api.getTxErrorData('fail'), 'boom');
     assert.throws(() => new DfsApi({ apiUrl: '' }), 'apiUrl is required');
+  });
+});
+
+describe('gas', () => {
+  afterEach(() => sinon.restore());
+
+  it('consults the priority fee oracle only when the base fee is high', async () => {
+    const chain = createMockChain();
+    const oracle = sinon.stub().resolves('3');
+    const provider = createDefaultGasPriceProvider(chain, { priorityFeeOracle: oracle });
+
+    chain.getLatestBaseFee.resolves(gweiToWei('150'));
+    assert.deepEqual(await provider(NetworkNumber.Eth, false), { baseFee: '150', priorityFee: '3' });
+    chain.getLatestBaseFee.resolves(gweiToWei('20'));
+    assert.deepEqual(await provider(NetworkNumber.Eth, false), { baseFee: '20', priorityFee: '0.5' });
+    sinon.assert.calledOnceWithExactly(oracle, NetworkNumber.Eth);
+  });
+
+  it('falls back to the static tip when the oracle fails and reports it', async () => {
+    const chain = createMockChain();
+    chain.getLatestBaseFee.resolves(gweiToWei('150'));
+    const captureException = sinon.spy();
+    const provider = createDefaultGasPriceProvider(chain, {
+      priorityFeeOracle: sinon.stub().rejects(new Error('oracle down')),
+      logger: { ...silentLogger, captureException },
+    });
+
+    assert.deepEqual(await provider(NetworkNumber.Arb, false), { baseFee: '150', priorityFee: '0.01' });
+    sinon.assert.calledWith(captureException, sinon.match.instanceOf(Error), sinon.match({ type: 'priorityFeeOracle' }));
+  });
+
+  it('floors the base fee on forks and halves the tip when the mainnet base fee is tiny', async () => {
+    const chain = createMockChain();
+    const provider = createDefaultGasPriceProvider(chain);
+
+    chain.getLatestBaseFee.resolves(gweiToWei('1'));
+    assert.deepEqual(await provider(NetworkNumber.Eth, true), { baseFee: '5', priorityFee: '0.5' });
+    chain.getLatestBaseFee.resolves(gweiToWei('0.2'));
+    assert.deepEqual(await provider(NetworkNumber.Eth, false), { baseFee: '0.2', priorityFee: '0.10' });
   });
 });

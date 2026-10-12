@@ -6,6 +6,7 @@ import type { TxSenderConfig } from '../../src/config/TxSenderConfig';
 import { silentLogger } from '../../src/interfaces/Logger';
 import { AccountType, type AnyProxyWallet, NetworkNumber, type TxReceipt } from '../../src/types';
 import { safeAbi } from '../../src/abi';
+import { ZERO_ADDRESS } from '../../src/config/constants';
 
 export const ACCOUNT = '0x1111111111111111111111111111111111111111';
 export const SPENDER = '0x2222222222222222222222222222222222222222';
@@ -49,6 +50,8 @@ export const createMockChain = (opts: MockChainOptions = {}): ChainAdapter & Stu
       if (selector === '0x313ce567') return encodeAbiParameters([{ type: 'uint8' }], [18]); // decimals
       if (selector === '0x95d89b41') return encodeAbiParameters([{ type: 'string' }], ['MOCK']); // symbol
       if (selector === '0xaffed0e0') return encodeAbiParameters([{ type: 'uint256' }], [7n]); // nonce
+      if (selector === '0x081812fc') return encodeAbiParameters([{ type: 'address' }], [ZERO_ADDRESS]); // getApproved: nobody approved
+      if (selector === '0x53e5d935') return encodeAbiParameters([{ type: 'bytes' }], ['0x60806040']); // proxyCreationCode
       try {
         const decoded = decodeFunctionData({ abi: safeAbi, data });
         if (decoded.functionName === 'getTransactionHash') return SAFE_TX_HASH as Hex;

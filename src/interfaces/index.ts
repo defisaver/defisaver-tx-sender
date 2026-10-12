@@ -4,7 +4,7 @@ export type {
 export type { StateProvider } from './StateProvider';
 export type { UiAdapter, NotificationPayload } from './UiAdapter';
 export type {
-  TxHooks, ApprovalEvent, ApprovalPhase, SignatureEvent,
+  TxHooks, HookPhase, ApprovalEvent, ApprovalPhase, ApprovalKind, SignatureEvent, SmartWalletCreationEvent, SmartWalletCreationOrigin,
 } from './Hooks';
 export type { Logger } from './Logger';
 export { consoleLogger, silentLogger } from './Logger';

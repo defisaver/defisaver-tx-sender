@@ -22,7 +22,7 @@ export interface CreateProxyParams {
   onExecuteBegin?: () => unknown | Promise<unknown>;
   onExecuteSuccess?: (receipt: TxReceipt) => unknown | Promise<unknown>;
   onExecuteError?: (error: Error) => unknown | Promise<unknown>;
-  changeWallet?: boolean; // Make the new Safe the active smart wallet. Forwarded to `hooks.onSmartWalletCreated`.
+  changeWallet?: boolean; // Make the new Safe the active smart wallet. Forwarded to `hooks.onSmartWalletCreation`.
 }
 
 /** Creates 1/1 Safe smart wallets through `SafeProxyFactory.createProxyWithNonce` with a deterministic salt. */
@@ -135,7 +135,10 @@ export default class ProxyWalletHandler {
       },
     });
 
+    const { hooks } = this.config;
+    const event = { origin: 'create', changeWallet } as const;
     createSafeWalletTx.setOnExecuteBegin(async () => {
+      await hooks.onSmartWalletCreation?.({ ...event, phase: 'request' }, createSafeWalletTx);
       await onExecuteBegin?.();
     });
     createSafeWalletTx.setOnExecuteSuccess(async (receipt: TxReceipt) => {
@@ -144,10 +147,13 @@ export default class ProxyWalletHandler {
       const safeWallet = getDefaultSafeWalletObject({
         address: this.parseSafeCreationEvent(log), owners, threshold, version: ProxyWalletHandler.ACTIVE_VERSION,
       });
-      await this.config.hooks.onSmartWalletCreated?.(safeWallet, receipt, { changeWallet });
+      await hooks.onSmartWalletCreation?.({
+        ...event, phase: 'success', wallet: safeWallet, receipt,
+      }, createSafeWalletTx);
       await onExecuteSuccess?.(receipt);
     });
     createSafeWalletTx.setOnExecuteError(async (err: Error) => {
+      await hooks.onSmartWalletCreation?.({ ...event, phase: 'failure', error: err }, createSafeWalletTx);
       await onExecuteError?.(err);
     });
     this.txs.push(createSafeWalletTx);

@@ -5,17 +5,25 @@ import type {
   NetworkNumber,
   SafeWallet,
   SignatureType,
+  TxMonitorRegistration,
   TxReceipt,
 } from '../types';
 import type { EncodingReturnType } from '../types/encoding';
 import type { TxConfirmData, TxSignConfirmData } from '../types/confirm';
 import type TxWrapper from '../TxWrapper';
 
-export type ApprovalPhase = 'request' | 'success' | 'failure';
+export type HookPhase = 'request' | 'success' | 'failure';
+
+export type ApprovalPhase = HookPhase;
+
+export type ApprovalKind = 'erc20' | 'erc721' | 'debtDelegation';
 
 export interface ApprovalEvent {
   phase: ApprovalPhase;
-  asset: string;
+  kind: ApprovalKind;
+  asset: string; // Display label: token symbol, or `NFT#<tokenId>` for ERC-721.
+  assetAddress: EthereumAddress;
+  tokenId?: string; // ERC-721 only.
   approveType: string;
   spender: EthereumAddress;
   isRevoke: boolean; // true for the approve(0) tx that precedes re-approval of USDT-like tokens
@@ -29,19 +37,32 @@ export interface SignatureEvent {
   sigType: SignatureType;
 }
 
+/** `create` is `SafeProxyFactory.createProxyWithNonce`; `createAndExecute` is `DFSSafeFactory.createSafeAndExecute`. */
+export type SmartWalletCreationOrigin = 'create' | 'createAndExecute';
+
+export interface SmartWalletCreationEvent {
+  phase: HookPhase;
+  origin: SmartWalletCreationOrigin;
+  changeWallet: boolean; // Whether the new Safe should become the active smart wallet.
+  wallet?: SafeWallet; // success only
+  receipt?: TxReceipt; // success only
+  error?: Error; // failure only
+}
+
 /** Side-effect callbacks. All optional. Replaces the Redux dispatches the original implementation made. */
 export interface TxHooks {
   onQueueStart?(txs: TxWrapper[]): void;
   onQueueProgress?(completed: number, total: number): void;
   onQueueEnd?(): void;
-  onTxHash?(hash: string, tx: TxWrapper): void | Promise<void>;
+  /** The SDK has already registered the tx with the backend monitor; `registration` is the payload it sent. */
+  onTxHash?(hash: string, tx: TxWrapper, registration: TxMonitorRegistration): void | Promise<void>;
   onTxMined?(hash: string, tx: TxWrapper): void;
   /** Fired before showing a confirm dialog. Useful for analytics. */
   onTxPrompt?(data: TxConfirmData | TxSignConfirmData, encoding: EncodingReturnType): void;
   onSignature?(event: SignatureEvent, tx: TxWrapper): void;
   onSafeTxData?(safeTx: ISafeTxDataParams, tx: TxWrapper): void;
   onApproval?(event: ApprovalEvent, tx: TxWrapper): void;
-  onSmartWalletCreated?(wallet: SafeWallet, receipt: TxReceipt, options: { changeWallet: boolean }): void | Promise<void>;
+  onSmartWalletCreation?(event: SmartWalletCreationEvent, tx: TxWrapper): void | Promise<void>;
   /** Called by create-and-execute flows when a different smart wallet must become active. */
   onSelectProxyWallet?(address: EthereumAddress): void | Promise<void>;
   /** Parse DFS swap / fee events out of a mined receipt. Defaults to no events. */

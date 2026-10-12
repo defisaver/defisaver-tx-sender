@@ -2,8 +2,11 @@ import { encodeFunctionData, type Hex } from 'viem';
 import { erc20Abi } from '../abi';
 import { DEFISAVER_IDENTIFICATION_SUFFIX, MAXUINT } from '../config/constants';
 import { buildTypedData, SignType } from '../services/typedData';
-import { gweiToWei, requireNotEmptyData, toHex } from '../services/utils';
 import {
+  compareAddresses, gweiToWei, requireNotEmptyData, toHex,
+} from '../services/utils';
+import {
+  AccountType,
   type EIP712TypedData,
   type EthereumAddress,
   type EventData,
@@ -12,6 +15,8 @@ import {
   type NetworkNumber,
   SignatureType,
   type SignatureData,
+  type TxMonitorRegistration,
+  TxOnBehalf,
   type TxReceipt,
 } from '../types';
 import type { ConfirmationRet } from '../types/confirm';
@@ -146,6 +151,32 @@ export default class TxUtils {
       signature,
       network,
       meta: tx.getMeta(forTxSaver),
+    };
+  }
+
+  /**
+   * Payload for the backend tx monitor. A tx executed by a smart wallet other than the selected one
+   * is registered under that wallet, so the right position is refreshed. Sets `tx.onBehalf` when unset.
+   */
+  async buildTxMonitorRegistration(tx: TxWrapper, txHash: string): Promise<TxMonitorRegistration> {
+    const {
+      account, accountType, network, forkId,
+    } = this.env;
+    const executingAddress = await tx.getExecutingAddressInTime();
+    const smartWalletAddress = executingAddress && !compareAddresses(executingAddress, account)
+      ? executingAddress
+      : this.env.config.state.getProxyAddress();
+    if (!tx.getOnBehalf()) tx.setOnBehalf(compareAddresses(executingAddress, smartWalletAddress) ? TxOnBehalf.SW : TxOnBehalf.EOA);
+    return {
+      address: account,
+      txHash,
+      title: tx.getTitle(),
+      category: tx.getCategory(),
+      onBehalf: tx.getOnBehalf() as TxOnBehalf,
+      smartWalletAddress,
+      isSafeMultisigTx: accountType === AccountType.GnosisSafe,
+      network,
+      forkId,
     };
   }
 

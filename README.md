@@ -172,6 +172,7 @@ sequenceDiagram
   participant Chain as ChainAdapter
   participant Ui as UiAdapter
   participant Hooks as TxHooks
+  participant Api as DfsApi
 
   App->>TxSender: execute()
   TxSender->>TxSender: canExecute() (reject view-only)
@@ -203,7 +204,8 @@ sequenceDiagram
     Executor->>Notifier: addNotificationSend("confirm in wallet")
     Executor->>Chain: sendTransaction(finalParams, onTxHash)
     Chain-->>Executor: onTxHash(hash)
-    Executor->>Hooks: onTxHash(hash, tx)
+    Executor->>Api: registerTxForMonitoring(registration) (not awaited)
+    Executor->>Hooks: onTxHash(hash, tx, registration)
     Executor->>Notifier: changeNotificationOnTxHash
     Chain-->>Executor: receipt
     Executor->>Hooks: parseReceiptEvents(receipt)
@@ -384,6 +386,7 @@ classDiagram
     +handleCreateAndExecute(txs, label)
     +handlePendingTx(type, multisigTx, safe)
     +predictSafeAddress()
+    +planProxyForExecution()
   }
   class TxWrapper {
     +type: TxType
@@ -479,6 +482,7 @@ interface TxSenderConfig {
   messages?: Partial<Messages>; // user-visible strings
   addresses?: AddressOverrides; // per-network contract overrides
   gasPriceProvider?: GasPriceProvider;
+  priorityFeeOracle?: PriorityFeeOracle; // tip oracle for the default provider
   approveTypeLabels?: Record<string, string>;
   tokensNeedReapprove?: string[];
   tenderly?: { account: string; project: string };
@@ -576,7 +580,7 @@ api: {
 }
 ```
 
-Endpoints used: `GET /safe/nonce`, `POST /safe/tx`, `POST /safe/signature`, `POST /safe/tx/cancel`, `POST /api/txsaver/submit`, `GET /api/txsaver/status`, `GET /api/tx-error/:hash`. The resolved config exposes the instance as `config.api` if you need to call them directly.
+Endpoints used: `GET /safe/nonce`, `POST /safe/tx`, `POST /safe/signature`, `POST /safe/tx/cancel`, `POST /api/txsaver/submit`, `GET /api/txsaver/status`, `GET /api/tx-error/:hash`, `POST /api/tx-monitor/register` (`POST /api/fork-tx-monitor/register` on forks). The resolved config exposes the instance as `config.api` if you need to call them directly.
 
 ### TxHooks
 
@@ -587,20 +591,21 @@ Optional side-effect callbacks. These replace the Redux dispatches the original 
 | `onQueueStart(txs)` | `execute()` begins | show "1 of N" progress |
 | `onQueueProgress(done, total)` | after each tx | advance progress |
 | `onQueueEnd()` | 5 s after success, or immediately on error | hide progress |
-| `onTxHash(hash, tx)` | tx hash known (awaited) | register tx with backend, pending-tx tracking |
+| `onTxHash(hash, tx, registration)` | tx hash known (awaited), after the SDK has posted `registration` to the backend tx monitor | mirror the pending tx into app state |
 | `onTxMined(hash, tx)` | receipt confirmed | store last mined tx, refresh balances |
 | `onTxPrompt(confirmData, encoding)` | before a confirm dialog | analytics (`txPromptOk` / `txPromptFailing`) |
 | `onSignature({ protocol, actionName, signature, sigType }, tx)` | EIP-712 signature produced | mirror into app state |
 | `onSafeTxData(safeTx, tx)` | create-and-execute Safe tx signed | mirror into app state |
-| `onApproval({ phase, asset, approveType, spender, isRevoke, error? }, tx)` | approve tx begins / succeeds / fails | approval reducers |
-| `onSmartWalletCreated(wallet, receipt, { changeWallet })` | Safe created | add to wallet list, localStorage, analytics, select it |
+| `onApproval({ phase, kind, asset, assetAddress, tokenId?, approveType, spender, isRevoke, error? }, tx)` | approve tx begins / succeeds / fails; `kind` is `erc20`, `erc721` or `debtDelegation` | approval reducers |
+| `onSmartWalletCreation({ phase, origin, changeWallet, wallet?, receipt?, error? }, tx)` | Safe creation tx begins / succeeds / fails; `origin` is `create` (`SafeProxyFactory`) or `createAndExecute` (`DFSSafeFactory`) | creating-wallet flag, add to wallet list, localStorage, analytics, select it |
 | `onSelectProxyWallet(address)` | create-and-execute needs a different active wallet | update selection |
 | `parseReceiptEvents(receipt, tx, network)` | after a receipt | parse DFS swap / fee events for the notification |
 | `getAssetPriceUsd(symbol, network)` | before offering TxSaver | enforce the minimum sell size |
 
 ### Other options
 
-- **`gasPriceProvider(network, isFork)`** returns `{ baseFee, priorityFee }` in gwei and is used only for the gas price attached to `eth_estimateGas` calls. The default reads the latest block's base fee and adds a static tip; apps with a gas oracle should override it. On failure the SDK falls back to `eth_gasPrice`, then to 1 gwei.
+- **`gasPriceProvider(network, isFork)`** returns `{ baseFee, priorityFee }` in gwei and is used only for the gas price attached to `eth_estimateGas` calls. The default reads the latest block's base fee (floored to a per-network minimum on forks) and adds a static tip. On failure the SDK falls back to `eth_gasPrice`, then to 1 gwei.
+- **`priorityFeeOracle(network)`** returns a priority fee in gwei. The default provider consults it only when the base fee is at least 100 gwei and falls back to the static tip when it fails (reported through `logger.captureException`). Ignored when `gasPriceProvider` is set.
 - **`messages`** overrides any user-facing string (see `DEFAULT_MESSAGES`). Placeholders: `%txHash`, `%txhash`, `%network`, `%gasPrice`.
 - **`addresses`** overrides `DEFAULT_ADDRESSES` per network: Safe 1.3.0 singleton / factory / fallback handler, `SimulateTxAccessor`, Uniswap-style multicall and `DFSSafeFactory`.
 - **`approveTypeLabels`** maps `approveType` keys (e.g. `'Smart Wallet'`) to display labels used in approval titles; defaults to the key itself.
@@ -670,11 +675,12 @@ Pending Safe txs are queued with `sender.handlePendingTx(type, multisigTx, safeA
 | `handleApproval({ isSpenderProxy, asset, spender, amount, shouldBump, approveType, useMaxuint?, assetAddress? })` | ERC-20 `approve` when on-chain allowance is below `amount`; a 0-approval first for `tokensNeedReapprove` on mainnet. Returns the queued wrappers. |
 | `handleAaveVariableDebtApproval(...)` | `approveDelegation` on an Aave variable-debt token when `borrowAllowance` is too low. |
 | `handleRawTx({ to, data, value?, title, executingAddress?, ... })` | A `TxType.Raw` tx with calldata encoded elsewhere (another SDK, a backend, a quote API). From the account it is sent as-is; with a Safe as `executingAddress` it is relayed through `execTransaction` as a plain `CALL` (1/1 sends, m/n goes through the multisig signing flow). DSProxy, DSA and Summer.fi only `delegatecall`, so they are rejected. Returns the queued wrapper. |
-| `handleMultipleApprovals({ approvals, approvalTokenAmounts, onApprovalsBegin, onApprovalsSuccess, onApprovalsError })` | Approvals for everything a recipe reports via `recipe.getAssetsToApprove()` (ERC-20 and ERC-721), owned by the account, for the selected smart wallet. The hooks are attached only when something was queued. |
+| `handleMultipleApprovals({ approvals, approvalTokenAmounts, onApprovalsBegin, onApprovalsSuccess, onApprovalsError })` | Approvals for everything a recipe reports via `recipe.getAssetsToApprove()` (ERC-20 and ERC-721), owned by the account, for the selected smart wallet. The callbacks are attached only when something was queued and run after the per-approval `hooks.onApproval` events. |
 | `handleApprovalsForProxy({ ..., spender, title, buildRecipe? })` | One recipe tx from the smart wallet approving `spender`. `buildRecipe` lets the app add extra actions (the DeFi Saver app appends strategy unsubscribes). |
-| `handleCreateProxy({ onExecuteBegin?, onExecuteSuccess?, onExecuteError?, changeWallet? })` | `SafeProxyFactory.createProxyWithNonce` for a 1/1 Safe with a deterministic salt (`'DeFi Saver'` + sequential nonce, skipping salts whose address already has code). On success parses the `ProxyCreation` log and fires `hooks.onSmartWalletCreated`. |
+| `handleCreateProxy({ onExecuteBegin?, onExecuteSuccess?, onExecuteError?, changeWallet? })` | `SafeProxyFactory.createProxyWithNonce` for a 1/1 Safe with a deterministic salt (`'DeFi Saver'` + sequential nonce, skipping salts whose address already has code). Fires `hooks.onSmartWalletCreation` with `origin: 'create'` on begin, success (with the Safe parsed from the `ProxyCreation` log) and failure. |
 | `predictSafeAddress()` | CREATE2 address the next `handleCreateProxy` would deploy to. |
-| `handleCreateAndExecute(txBuilders, label)` | Picks the executing wallet: the selected one if it is a known non-multisig wallet, else any 1/1 Safe or DSProxy, else a predicted Safe. In the last case appends a `DFSSafeFactory.createSafeAndExecute` tx that reads the signature produced by a preceding `SignForCreateAndExecute` tx from the `SignatureStore`. |
+| `planProxyForExecution()` | The `{ proxyForExecution, useCreateAndExecute }` that `handleCreateAndExecute` would use, without queueing anything. For callers that must build txs for the same wallet up front. |
+| `handleCreateAndExecute(txBuilders, label)` | Picks the executing wallet: the selected one if it is a known non-multisig wallet, else any 1/1 Safe or DSProxy, else a predicted Safe. In the last case appends a `DFSSafeFactory.createSafeAndExecute` tx that reads the signature produced by a preceding `SignForCreateAndExecute` tx from the `SignatureStore` and fires `hooks.onSmartWalletCreation` with `origin: 'createAndExecute'`. |
 
 The create-and-execute builders receive `{ proxyForExecution, useCreateAndExecute }` so they can target the right wallet and choose `TxType.SignForCreateAndExecute` when the Safe does not exist yet.
 
@@ -698,13 +704,14 @@ The public surface is intentionally close to `client/src/txSender`, so most call
 | `new TxSender(dispatch, getState, txs)` | `new TxSender(txs)` |
 | `contractCallParams: { contract: getErc20(addr), method, methodParams }` | `contractCallParams: { address, abi, method, methodParams }`, or `fromWeb3Contract(getErc20(addr), method, methodParams)` from the web3 example adapter |
 | `txSender.handleApproval(isSpenderProxy, asset, spender, amount, shouldBump, approveType, useMaxuint, assetAddress)` | `txSender.handleApproval({ isSpenderProxy, asset, spender, amount, shouldBump, approveType, useMaxuint, assetAddress })` |
-| `txSender.handleCreateProxy({ onExecuteSuccess })` | unchanged; wallet-list / localStorage / analytics work moves to `hooks.onSmartWalletCreated` |
+| `txSender.handleCreateProxy({ onExecuteSuccess })` | unchanged; `CREATE_SMART_WALLET_*` dispatches, wallet-list / localStorage / analytics work move to `hooks.onSmartWalletCreation` |
 | `execute(returnValues, enableEip7702)` | `execute(returnValues, { batch: enableEip7702 })` |
 | `window._web3`, `window._web3Signer` | a `ChainAdapter` implemented in the app, e.g. the web3 example adapter with `{ web3, web3Signer }` |
 | `DfsTxNotifier` (dispatches `addNotification`, `confirmTx`, ...) | `UiAdapter` implemented with those same dispatches |
-| `registerTx`, `storeLastMinedTx`, `SIGNATURE_REDUCER` dispatches | `hooks.onTxHash`, `hooks.onTxMined`, `hooks.onSignature` / `onSafeTxData` |
-| `APPROVE_ADDRESS_ON_ASSET_*` dispatches | `hooks.onApproval` |
-| `getEip1559GasData` (Blocknative) | `gasPriceProvider` |
+| `registerTx` (`addTxHashForMonitoringApiCall` + `ADD_SERVER_TX`) | built in: the SDK posts to the tx monitor; `hooks.onTxHash(hash, tx, registration)` receives the same payload for the `ADD_SERVER_TX` dispatch |
+| `storeLastMinedTx`, `SIGNATURE_REDUCER` dispatches | `hooks.onTxMined`, `hooks.onSignature` / `onSafeTxData` |
+| `APPROVE_ADDRESS_ON_ASSET_*`, `APPROVE_NFT_ON_ADDRESS_*` dispatches | `hooks.onApproval`, switching on `event.kind` |
+| `getEip1559GasData` (Blocknative) | `priorityFeeOracle` wrapping the Blocknative call, on top of the default provider; or a full `gasPriceProvider` |
 | `parseSwapsFromReceipts`, `parseAllFeesFromReceipts` | `hooks.parseReceiptEvents` |
 | `t('errors.user_canceled')` etc. | `messages` |
 | `testAccs` local signing on forks | `chain.signSafeTx` / `signTypedData` in a fork-aware adapter |

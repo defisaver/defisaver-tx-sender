@@ -3,6 +3,7 @@ import type {
   MultisigSignatureForDb,
   MultisigTxForDb,
   NetworkNumber,
+  TxMonitorRegistration,
   TxSaverStatusCheckApiReturnData,
   TxSaverSubmitApiData,
 } from '../types';
@@ -90,6 +91,14 @@ export class DfsApi {
   async getTxSaverTxStatus(txId: number, network: NetworkNumber): Promise<TxSaverStatusCheckApiReturnData> {
     const res = await this.fetch(withParams(`${this.apiUrl}/api/txsaver/status`, { txId, network }), { signal: this.signal() });
     return res.json();
+  }
+
+  /** Registers a sent tx with the backend monitor so its status is tracked server-side. Forks use a separate monitor. */
+  async registerTxForMonitoring(registration: TxMonitorRegistration): Promise<void> {
+    const { forkId = '', ...rest } = registration;
+    const endpoint = forkId ? `${this.apiUrl}/api/fork-tx-monitor/register` : `${this.apiUrl}/api/tx-monitor/register`;
+    const res = await this.post(endpoint, { ...rest, forkId });
+    if (!res.ok) throw new Error(`Failed to register tx for monitoring: ${await res.text()}`);
   }
 
   /** Revert reason shown in the failed notification. */

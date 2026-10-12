@@ -40,7 +40,11 @@ export default class SendNormalTxExecutor extends ExecutorBase {
   private onTxHash(context: ExecutionContext) {
     const { tx, notifier, env } = context;
     return async (txHash: string) => {
-      await env.config.hooks.onTxHash?.(txHash, tx);
+      const registration = await context.txUtils.buildTxMonitorRegistration(tx, txHash);
+      env.config.api.registerTxForMonitoring(registration).catch((err) => {
+        env.config.logger.captureException?.(err, { type: 'registerTxForMonitoring', txHash });
+      });
+      await env.config.hooks.onTxHash?.(txHash, tx, registration);
       notifier.changeNotificationOnTxHash(formatMessage(env.config.messages.txSent, { '%txHash': formatTxHash(txHash) }), txHash);
       tx.onTxHashCallback(txHash);
     };

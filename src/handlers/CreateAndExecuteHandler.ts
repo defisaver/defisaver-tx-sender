@@ -88,6 +88,8 @@ export default class CreateAndExecuteHandler {
       },
     });
 
+    const event = { origin: 'createAndExecute', changeWallet: true } as const;
+    createAndExecuteTx.setOnExecuteBegin(() => hooks.onSmartWalletCreation?.({ ...event, phase: 'request' }, createAndExecuteTx));
     createAndExecuteTx.setOnExecuteSuccess(async (receipt: TxReceipt) => {
       const log = this.proxyWallet.findProxyCreationLog(receipt);
       // CREATE2 makes the predicted address authoritative when the event is missing.
@@ -95,8 +97,11 @@ export default class CreateAndExecuteHandler {
       const safeWallet = getDefaultSafeWalletObject({
         address: newSafeAddress, owners: [account], threshold: 1, version: ProxyWalletHandler.ACTIVE_VERSION,
       });
-      await hooks.onSmartWalletCreated?.(safeWallet, receipt, { changeWallet: true });
+      await hooks.onSmartWalletCreation?.({
+        ...event, phase: 'success', wallet: safeWallet, receipt,
+      }, createAndExecuteTx);
     });
+    createAndExecuteTx.setOnExecuteError((error: Error) => hooks.onSmartWalletCreation?.({ ...event, phase: 'failure', error }, createAndExecuteTx));
     this.txs.push(createAndExecuteTx);
   }
 }

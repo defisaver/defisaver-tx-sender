@@ -55,6 +55,11 @@ export interface ApprovalsForProxyParams extends MultipleApprovalsParams {
   buildRecipe?: (approvals: { asset: EthereumAddress; amountInWei: string }[], spender: EthereumAddress) => Promise<Recipe>;
 }
 
+const chainHooks = <T extends unknown[]>(prev: (...args: T) => unknown, next: (...args: T) => unknown) => async (...args: T) => {
+  await prev(...args);
+  await next(...args);
+};
+
 const isRecipeNftApproval = (approval: RecipeApproval): approval is RecipeNftApproval => (approval as RecipeNftApproval).nft !== undefined;
 
 /** Builds approve txs when on-chain allowance is below the required amount. */
@@ -122,7 +127,9 @@ export default class ApprovalHandler {
       },
       isExactApproval: isRevoke || amountWei !== MAXUINT,
     });
-    const event = { asset: assetLabel, approveType, isRevoke } as const;
+    const event = {
+      kind: method === 'approve' ? 'erc20' : 'debtDelegation', asset: assetLabel, assetAddress, approveType, isRevoke,
+    } as const;
     tx.setOnExecuteBegin(() => {
       const resolved = this.resolveSpender(isSpenderProxy, spender);
       requireAddress(resolved);
@@ -221,7 +228,9 @@ export default class ApprovalHandler {
         methodParams: () => [this.resolveSpender(isSpenderProxy, spender), nftId],
       },
     });
-    const event = { asset: `NFT#${nftId}`, approveType, isRevoke: false } as const;
+    const event = {
+      kind: 'erc721', asset: `NFT#${nftId}`, assetAddress: nftAddress, tokenId: nftId, approveType, isRevoke: false,
+    } as const;
     tx.setOnExecuteBegin(() => {
       const resolved = this.resolveSpender(isSpenderProxy, spender);
       requireAddress(resolved);
@@ -288,9 +297,13 @@ export default class ApprovalHandler {
     }
 
     if (this.txs.length === txCountPreApproval) return;
-    this.txs[txCountPreApproval].setOnExecuteBegin(onApprovalsBegin);
-    this.txs[this.txs.length - 1].setOnExecuteSuccess(onApprovalsSuccess);
-    this.txs.slice(txCountPreApproval).forEach((tx) => tx.setOnExecuteError(onApprovalsError));
+    // Chain rather than replace, so the per-approval `onApproval` events keep firing.
+    const queued = this.txs.slice(txCountPreApproval);
+    const [first] = queued;
+    const last = queued[queued.length - 1];
+    first.setOnExecuteBegin(chainHooks(first.onExecuteBegin, onApprovalsBegin));
+    last.setOnExecuteSuccess(chainHooks(last.onExecuteSuccess, onApprovalsSuccess));
+    queued.forEach((tx) => tx.setOnExecuteError(chainHooks(tx.onExecuteError, onApprovalsError)));
   }
 
   /** One recipe tx from the smart wallet approving `spender` for every asset still lacking allowance. */
