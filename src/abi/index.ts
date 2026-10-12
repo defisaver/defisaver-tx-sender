@@ -264,6 +264,9 @@ export const erc20Abi = [
   {
     type: 'function', name: 'symbol', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }],
   },
+  {
+    type: 'function', name: 'name', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }],
+  },
 ] as const satisfies Abi;
 
 export const aaveDebtTokenAbi = [

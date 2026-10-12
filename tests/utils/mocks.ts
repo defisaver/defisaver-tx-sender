@@ -50,6 +50,7 @@ export const createMockChain = (opts: MockChainOptions = {}): ChainAdapter & Stu
       if (selector === '0xdd62ed3e' || selector === '0x6bd76d24') return encodeAbiParameters([{ type: 'uint256' }], [allowance]);
       if (selector === '0x313ce567') return encodeAbiParameters([{ type: 'uint8' }], [18]); // decimals
       if (selector === '0x95d89b41') return encodeAbiParameters([{ type: 'string' }], ['MOCK']); // symbol
+      if (selector === '0x06fdde03') return encodeAbiParameters([{ type: 'string' }], ['Mock Token']); // name
       if (selector === '0xaffed0e0') return encodeAbiParameters([{ type: 'uint256' }], [7n]); // nonce
       if (selector === '0x081812fc') return encodeAbiParameters([{ type: 'address' }], [ZERO_ADDRESS]); // getApproved: nobody approved
       if (selector === '0x53e5d935') return encodeAbiParameters([{ type: 'bytes' }], ['0x60806040']); // proxyCreationCode

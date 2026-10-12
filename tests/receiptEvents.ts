@@ -66,6 +66,18 @@ describe('receipt events', () => {
     assert.isUndefined(swapRate); // Only computed when there are no recipe swaps.
   });
 
+  it('returns full @defisaver/tokens records, also for tokens resolved on-chain', async () => {
+    const { recipeSwaps } = await parse([sellLog(TOKEN, SPENDER, 10n ** 18n, 10n ** 18n)]);
+    const [{ sellToken, buyToken }] = recipeSwaps;
+
+    assert.equal(sellToken.name, 'Dai Stablecoin');
+    assert.property(sellToken, 'addresses'); // UI renders `icon` and friends, not just symbol / decimals.
+    assert.include(buyToken, {
+      symbol: 'MOCK', name: 'Mock Token', decimals: 18, address: SPENDER,
+    });
+    assert.property(buyToken, 'addresses');
+  });
+
   it('sums service fee transfers per asset and unwraps WETH', async () => {
     const { fees } = await parse([
       transferLog(TOKEN, FEE_ADDRESS, 5n * 10n ** 18n),

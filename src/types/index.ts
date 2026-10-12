@@ -1,5 +1,6 @@
 import type { Abi } from 'viem';
 import type { Recipe } from '@defisaver/sdk';
+import type { AssetData } from '@defisaver/tokens';
 
 export type EthereumAddress = string;
 export type Hex = `0x${string}`;
@@ -271,11 +272,8 @@ export interface RecipeNftApproval {
 
 export type RecipeApproval = RecipeNftApproval | RecipeAssetApproval;
 
-export interface TokenInfo {
-  symbol: string;
-  address: EthereumAddress;
-  decimals: number;
-}
+/** Full `@defisaver/tokens` record (incl. `icon` when the host configured `iconFunc`), so UI code can render it directly. */
+export type TokenInfo = AssetData;
 
 export interface RecipeSwap {
   buyAmount: string;

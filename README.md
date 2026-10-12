@@ -373,7 +373,7 @@ stateDiagram-v2
 
 | Field | Source |
 | --- | --- |
-| `recipeSwaps` | `DFSSell` action events (name hash in `topics[1]` for direct actions, `topics[2]` for recipes). Token data via `getErc20TokenData`, amounts in token units, `swapRate = sell / buy`. Empty sells are dropped. |
+| `recipeSwaps` | `DFSSell` action events (name hash in `topics[1]` for direct actions, `topics[2]` for recipes). Tokens are full `@defisaver/tokens` `AssetData` records via `getErc20TokenData` (so `icon` is set when the host configured `iconFunc`; on-chain `name` / `symbol` / `decimals` are layered over the placeholder for unknown tokens), amounts in token units, `swapRate = sell / buy`. Empty sells are dropped. |
 | `fees` (`service`) | ERC-20 `Transfer`s to the address `FeeRecipient.getFeeAddr()` returns, summed per asset, WETH / WXPL unwrapped. A failed lookup is reported through `logger.captureException` and leaves the swaps intact. |
 | `fees` (`aaveFL`) | `Transfer`s to the `FLAaveV2` (mainnet) or `FLAaveV3` (L2) action from `@defisaver/sdk`; the fee is the delta between consecutive transfers per asset. |
 | `swapRate` | Only when there are no recipe swaps and the tx has `additionalInfo.firstToken / secondToken`: from the 0x `TransformedERC20` event, else from the first / last Uniswap-style `Swap` event. |
