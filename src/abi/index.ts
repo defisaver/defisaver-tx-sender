@@ -299,3 +299,9 @@ export const erc721Abi = [
     outputs: [{ type: 'address' }],
   },
 ] as const satisfies Abi;
+
+export const feeRecipientAbi = [
+  {
+    inputs: [], name: 'getFeeAddr', outputs: [{ type: 'address' }], stateMutability: 'view', type: 'function',
+  },
+] as const satisfies Abi;

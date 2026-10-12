@@ -271,11 +271,17 @@ export interface RecipeNftApproval {
 
 export type RecipeApproval = RecipeNftApproval | RecipeAssetApproval;
 
+export interface TokenInfo {
+  symbol: string;
+  address: EthereumAddress;
+  decimals: number;
+}
+
 export interface RecipeSwap {
   buyAmount: string;
-  buyToken: unknown;
+  buyToken: TokenInfo;
   sellAmount: string;
-  sellToken: unknown;
+  sellToken: TokenInfo;
   swapRate: string;
   wrapper: string;
 }
@@ -283,7 +289,7 @@ export interface RecipeSwap {
 export interface Fee {
   feeAmount: number;
   feeAsset: string;
-  type: string;
+  type: 'service' | 'aaveFL';
 }
 
 export interface EventData {

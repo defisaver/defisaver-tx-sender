@@ -1,6 +1,7 @@
 import { encodeFunctionData, type Hex } from 'viem';
 import { erc20Abi } from '../abi';
 import { DEFISAVER_IDENTIFICATION_SUFFIX, MAXUINT } from '../config/constants';
+import { parseDfsReceiptEvents } from '../services/receiptEvents';
 import { buildTypedData, SignType } from '../services/typedData';
 import {
   compareAddresses, gweiToWei, requireNotEmptyData, toHex,
@@ -180,11 +181,14 @@ export default class TxUtils {
     };
   }
 
+  /** Swap / fee data for the success notification. `hooks.parseReceiptEvents` replaces the built-in parser. */
   async getEventData(receipt: TxReceipt, tx: TxWrapper, network: NetworkNumber): Promise<EventData> {
-    const parser = this.env.config.hooks.parseReceiptEvents;
-    if (!parser) return { recipeSwaps: [], fees: [] };
+    const { chain, hooks, logger } = this.env.config;
     try {
-      return await parser(receipt, tx, network);
+      if (hooks.parseReceiptEvents) return await hooks.parseReceiptEvents(receipt, tx, network);
+      return await parseDfsReceiptEvents({
+        chain, receipt, network, addresses: this.env.addresses, additionalInfo: tx.getAdditionalInfo(), logger,
+      });
     } catch (err) {
       this.env.config.logger.captureException?.(err, { type: 'parseReceiptEvents', hash: receipt.transactionHash });
       return { recipeSwaps: [], fees: [] };

@@ -208,7 +208,7 @@ sequenceDiagram
     Executor->>Hooks: onTxHash(hash, tx, registration)
     Executor->>Notifier: changeNotificationOnTxHash
     Chain-->>Executor: receipt
-    Executor->>Hooks: parseReceiptEvents(receipt)
+    Executor->>Utils: getEventData(receipt) → parseDfsReceiptEvents, or hooks.parseReceiptEvents
     Executor->>Notifier: changeNotificationOnReceipt
     Executor->>Hooks: onTxMined(hash, tx)
     Executor->>Executor: tx.onExecuteSuccess(receipt)
@@ -366,6 +366,19 @@ stateDiagram-v2
 ```
 
 `status` values passed to `UiAdapter.changeNotification` are `pending-sign`, `pending`, `confirmed`, `signed`, `failed` and, for batches, `success`.
+
+### Receipt events
+
+`eventData` on the confirmed notification comes from `parseDfsReceiptEvents` (`src/services/receiptEvents.ts`), a port of the app's `recipeSuccessService` + `eventUtils` onto the normalised `TxReceipt`:
+
+| Field | Source |
+| --- | --- |
+| `recipeSwaps` | `DFSSell` action events (name hash in `topics[1]` for direct actions, `topics[2]` for recipes). Token data via `getErc20TokenData`, amounts in token units, `swapRate = sell / buy`. Empty sells are dropped. |
+| `fees` (`service`) | ERC-20 `Transfer`s to the address `FeeRecipient.getFeeAddr()` returns, summed per asset, WETH / WXPL unwrapped. A failed lookup is reported through `logger.captureException` and leaves the swaps intact. |
+| `fees` (`aaveFL`) | `Transfer`s to the `FLAaveV2` (mainnet) or `FLAaveV3` (L2) action from `@defisaver/sdk`; the fee is the delta between consecutive transfers per asset. |
+| `swapRate` | Only when there are no recipe swaps and the tx has `additionalInfo.firstToken / secondToken`: from the 0x `TransformedERC20` event, else from the first / last Uniswap-style `Swap` event. |
+
+`hooks.parseReceiptEvents` replaces the whole parser; the individual pieces are exported for apps that only want part of it.
 
 ### Class overview
 
@@ -599,7 +612,7 @@ Optional side-effect callbacks. These replace the Redux dispatches the original 
 | `onApproval({ phase, kind, asset, assetAddress, tokenId?, approveType, spender, isRevoke, error? }, tx)` | approve tx begins / succeeds / fails; `kind` is `erc20`, `erc721` or `debtDelegation` | approval reducers |
 | `onSmartWalletCreation({ phase, origin, changeWallet, wallet?, receipt?, error? }, tx)` | Safe creation tx begins / succeeds / fails; `origin` is `create` (`SafeProxyFactory`) or `createAndExecute` (`DFSSafeFactory`) | creating-wallet flag, add to wallet list, localStorage, analytics, select it |
 | `onSelectProxyWallet(address)` | create-and-execute needs a different active wallet | update selection |
-| `parseReceiptEvents(receipt, tx, network)` | after a receipt | parse DFS swap / fee events for the notification |
+| `parseReceiptEvents(receipt, tx, network)` | after a receipt | override the built-in `parseDfsReceiptEvents` (recipe swaps, service + Aave FL fees, swap rate) |
 | `getAssetPriceUsd(symbol, network)` | before offering TxSaver | enforce the minimum sell size |
 
 ### Other options
@@ -607,7 +620,7 @@ Optional side-effect callbacks. These replace the Redux dispatches the original 
 - **`gasPriceProvider(network, isFork)`** returns `{ baseFee, priorityFee }` in gwei and is used only for the gas price attached to `eth_estimateGas` calls. The default reads the latest block's base fee (floored to a per-network minimum on forks) and adds a static tip. On failure the SDK falls back to `eth_gasPrice`, then to 1 gwei.
 - **`priorityFeeOracle(network)`** returns a priority fee in gwei. The default provider consults it only when the base fee is at least 100 gwei and falls back to the static tip when it fails (reported through `logger.captureException`). Ignored when `gasPriceProvider` is set.
 - **`messages`** overrides any user-facing string (see `DEFAULT_MESSAGES`). Placeholders: `%txHash`, `%txhash`, `%network`, `%gasPrice`.
-- **`addresses`** overrides `DEFAULT_ADDRESSES` per network: Safe 1.3.0 singleton / factory / fallback handler, `SimulateTxAccessor`, Uniswap-style multicall and `DFSSafeFactory`.
+- **`addresses`** overrides `DEFAULT_ADDRESSES` per network: Safe 1.3.0 singleton / factory / fallback handler, `SimulateTxAccessor`, Uniswap-style multicall, `DFSSafeFactory`, `FeeRecipient` (service fee destination) and the 0x exchange proxy (swap-rate fallback).
 - **`approveTypeLabels`** maps `approveType` keys (e.g. `'Smart Wallet'`) to display labels used in approval titles; defaults to the key itself.
 - **`tokensNeedReapprove`** lists mainnet tokens that must be reset to 0 before a new non-zero approval (USDT and friends).
 - **`signatures`** is the `SignatureStore` that links `TypedSignature` txs to later txs in the same queue (create-and-execute). One shared instance is created by default.
@@ -712,7 +725,7 @@ The public surface is intentionally close to `client/src/txSender`, so most call
 | `storeLastMinedTx`, `SIGNATURE_REDUCER` dispatches | `hooks.onTxMined`, `hooks.onSignature` / `onSafeTxData` |
 | `APPROVE_ADDRESS_ON_ASSET_*`, `APPROVE_NFT_ON_ADDRESS_*` dispatches | `hooks.onApproval`, switching on `event.kind` |
 | `getEip1559GasData` (Blocknative) | `priorityFeeOracle` wrapping the Blocknative call, on top of the default provider; or a full `gasPriceProvider` |
-| `parseSwapsFromReceipts`, `parseAllFeesFromReceipts` | `hooks.parseReceiptEvents` |
+| `parseSwapsFromReceipts`, `parseAllFeesFromReceipts`, `parseSwapEventsFromReceipt` | built in (`parseDfsReceiptEvents`); `hooks.parseReceiptEvents` only to override |
 | `t('errors.user_canceled')` etc. | `messages` |
 | `testAccs` local signing on forks | `chain.signSafeTx` / `signTypedData` in a fork-aware adapter |
 | `services/apiServices` Safe + TxSaver calls | built in; pass `api: { apiUrl, safeApiUrl }` from `clientConfig.json` |

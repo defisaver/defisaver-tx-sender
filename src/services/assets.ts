@@ -3,14 +3,10 @@ import { getAssetInfo, getAssetInfoByAddress } from '@defisaver/tokens';
 import type { ChainAdapter } from '../interfaces/ChainAdapter';
 import { erc20Abi } from '../abi';
 import { CONTINUOUS_FEE_MULTIPLIER } from '../config/constants';
-import { NetworkNumber, type EthereumAddress } from '../types';
+import { NetworkNumber, type EthereumAddress, type TokenInfo } from '../types';
 import { readContract } from './abi';
 
-export interface Erc20TokenData {
-  symbol: string;
-  address: EthereumAddress;
-  decimals: number;
-}
+export type Erc20TokenData = TokenInfo;
 
 const isPlasma = (network: NetworkNumber) => network === NetworkNumber.Plasma;
 
@@ -23,6 +19,12 @@ export const isNativeAssetOnAnotherNetwork = (asset: string, network: NetworkNum
 export const getWrappedNativeAssetFromUnwrapped = (symbol: string) => {
   if (symbol === 'ETH') return 'WETH';
   if (symbol === 'XPL') return 'WXPL';
+  return symbol;
+};
+
+export const getNativeAssetFromWrapped = (symbol: string) => {
+  if (symbol === 'WETH') return 'ETH';
+  if (symbol === 'WXPL') return 'XPL';
   return symbol;
 };
 

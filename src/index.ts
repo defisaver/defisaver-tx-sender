@@ -30,7 +30,13 @@ export {
 export { getProxyWalletByAddress } from './services/wallets';
 export { processActionsForPrev } from './services/recipe';
 export { encodeCall, readContract, resolveAbiFunction } from './services/abi';
-export { getErc20TokenData, bumpAmountForApproval, getNetworkNativeAsset } from './services/assets';
+export {
+  getErc20TokenData, bumpAmountForApproval, getNetworkNativeAsset, getNativeAssetFromWrapped,
+} from './services/assets';
+export {
+  parseDfsReceiptEvents, parseSellEvents, parseRecipeSwaps, parseServiceFees, parseAaveFlashLoanFees, parseSwapRate, getTransfersTo,
+} from './services/receiptEvents';
+export type { ParseReceiptEventsParams, SellEvent } from './services/receiptEvents';
 export {
   compareAddresses, requireAddress, requireContract, toUnits, fromUnits, gweiToWei, weiToGwei, isLayer2Network,
 } from './services/utils';

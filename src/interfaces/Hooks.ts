@@ -65,7 +65,7 @@ export interface TxHooks {
   onSmartWalletCreation?(event: SmartWalletCreationEvent, tx: TxWrapper): void | Promise<void>;
   /** Called by create-and-execute flows when a different smart wallet must become active. */
   onSelectProxyWallet?(address: EthereumAddress): void | Promise<void>;
-  /** Parse DFS swap / fee events out of a mined receipt. Defaults to no events. */
+  /** Replaces the built-in DFS swap / fee parsing of a mined receipt (`parseDfsReceiptEvents`). */
   parseReceiptEvents?(receipt: TxReceipt, tx: TxWrapper, network: NetworkNumber): Promise<EventData>;
   /** USD price for a token symbol. Enables the TxSaver minimum-sell check. */
   getAssetPriceUsd?(symbol: string, network: NetworkNumber): Promise<string>;

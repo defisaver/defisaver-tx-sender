@@ -15,6 +15,7 @@ export const DS_PROXY = '0x3333333333333333333333333333333333333333';
 export const SAFE = '0x4444444444444444444444444444444444444444';
 export const TX_HASH = '0xabc0000000000000000000000000000000000000000000000000000000000001';
 export const SAFE_TX_HASH = '0x5555555555555555555555555555555555555555555555555555555555555555';
+export const FEE_ADDRESS = '0x7777777777777777777777777777777777777777';
 
 export const receipt = (overrides: Partial<TxReceipt> = {}): TxReceipt => ({
   transactionHash: TX_HASH,
@@ -52,6 +53,7 @@ export const createMockChain = (opts: MockChainOptions = {}): ChainAdapter & Stu
       if (selector === '0xaffed0e0') return encodeAbiParameters([{ type: 'uint256' }], [7n]); // nonce
       if (selector === '0x081812fc') return encodeAbiParameters([{ type: 'address' }], [ZERO_ADDRESS]); // getApproved: nobody approved
       if (selector === '0x53e5d935') return encodeAbiParameters([{ type: 'bytes' }], ['0x60806040']); // proxyCreationCode
+      if (selector === '0xb38779eb') return encodeAbiParameters([{ type: 'address' }], [FEE_ADDRESS]); // FeeRecipient.getFeeAddr
       try {
         const decoded = decodeFunctionData({ abi: safeAbi, data });
         if (decoded.functionName === 'getTransactionHash') return SAFE_TX_HASH as Hex;
